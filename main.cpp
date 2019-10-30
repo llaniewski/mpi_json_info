@@ -2,6 +2,7 @@
 #include <mpi.h>
 #include <vector>
 #include <fstream>
+#include "glue.hpp"
 
 std::string nodeName(MPI_Comm comm) {
 	int rank, size;
@@ -22,26 +23,22 @@ std::string nodeName(MPI_Comm comm) {
 }
 
 std::string cpuJSON() {
-	std::string ret;
-	std::string cores;
-	std::string cpus;
+	Glue ret(", ","{ ", " }");
+	Glue cores(", ","{ ", " }");
+	Glue physical(", ","{ ", " }");
 	std::ifstream f("/proc/cpuinfo");
 	if (f.fail()) {
-		ret = ret + "\"error\": \"/proc/cpuinfo: " + strerror(errno) + "\"";
+		ret << "\"error\": \"/proc/cpuinfo: " << strerror(errno) << "\"";
 	} else {
-		bool first = true;
 		std::string corename = "unknown";
-		std::string core;
-		std::string cpuname = "unknown";
-		std::string cpu;
+		Glue core(", ","{ ", " }");
+		//std::string cpuname = "unknown";
+		//std::string cpu;
 		std::string line;
 		while (std::getline(f, line)) {
 			if (line == "") {
-				core = "\"" + corename + "\": { " + core + " }";
-				if (!first) ret = ret + ", ";
-				first = false;
-				cores = cores + proc;
-				proc = "";
+				cores << "\"" + corename + "\": " + core.str();
+				core.clear();
 			} else {
 				size_t i,j;
 				i = line.find(":");
@@ -51,27 +48,27 @@ std::string cpuJSON() {
 				std::string tag = line.substr(0,j);
 				std::string val = line.substr(i+1,line.size()-i-1);
 				if (tag == "processor") {
-					procnum = val;
-					proc = proc + "\"number\": " + val;
+					corename = val;
+					core << "\"number\": " + val;
 				} else if (tag == "model name") {
-					proc = proc + ", \"name\": \"" + val + "\"";
+					core << "\"name\": \"" + val + "\"";
 				} else if (tag == "physical id") {
-					proc = proc + ", \"physical\": " + val;
+					core << "\"physical\": " + val;
 				} else if (tag == "cache size") {
-					proc = proc + ", \"cache\": \"" + val + "\"";
+					core << "\"cache\": \"" + val + "\"";
 				} else if (tag == "ventor id") {
-					proc = proc + ", \"ventor\": \"" + val + "\"";
+					core << "\"ventor\": \"" + val + "\"";
 				} else if (tag == "siblings") {
-					proc = proc + ", \"siblings\": \"" + val + "\"";
+					core << "\"siblings\": \"" + val + "\"";
 				} else if (tag == "cpu MHz") {
-					proc = proc + ", \"freq\": " + val;
+					core << "\"freq\": " + val;
 				}
 			}
 		}
 		f.close();
 	}
-	ret = "{ " + ret + " }";
-	return ret;
+	ret << "\"cores\": " + cores.str();
+	return ret.str();
 }
 
 std::string nodeJSON(MPI_Comm comm) {
