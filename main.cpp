@@ -98,6 +98,8 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 
 std::string nodesJSON(MPI_Comm comm) {
 	Glue nodes(", ", "[ ", " ]");
+	Glue ranks(", ", "[ ", " ]");
+	Glue ret(", ", "{ ", " }");
 	int rank, size;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
@@ -120,9 +122,10 @@ std::string nodesJSON(MPI_Comm comm) {
 		MPI_Allreduce(&wrank, &firstrank, 1, MPI_INT, MPI_MIN, comm );
 		if (firstrank >= size) break;
 	}
-	return nodes.str();
+	ret << "\"ranks\": " << ranks.str();
+	ret << "\"nodes\": " << nodes.str();
+	return ret.str();
 }
-
 
 int main ( int argc, char * argv[] )
 {
