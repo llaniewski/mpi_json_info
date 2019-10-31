@@ -119,12 +119,13 @@ std::pair< std::string, int > procJSON(int node) {
 	return std::make_pair( ret.str(), core );
 }
 
-std::string nodesJSON(MPI_Comm comm) {
+std::string nodesJSON(MPI_Comm comm, bool detailed) {
 	Glue nodes(", ", "[ ", " ]");
 	Glue ret(", ", "{ ", " }");
 	int rank, size;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
+	ret << (Glue() << "\"size\": " << size).str();
 	std::string pname = nodeName(comm);
 	int wrank = rank;
 	int firstrank = 0;
@@ -146,7 +147,7 @@ std::string nodesJSON(MPI_Comm comm) {
 	}
 	std::pair< std::string, int > procjson = procJSON(mynode);
 	int core = procjson.second;
-	if (false) {
+	if (detailed) {
 		Glue ranks(", ", "[ ", " ]");
 		for (int i=0; i<size; i++) {
 			std::string otherproc;
@@ -155,6 +156,7 @@ std::string nodesJSON(MPI_Comm comm) {
 		}
 		ret << "\"ranks\": " + ranks.str();
 	}
+	
 	int* perrank = NULL;
 	if (rank == 0) perrank = new int[size];
 	MPI_Gather(&core, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
@@ -166,6 +168,63 @@ std::string nodesJSON(MPI_Comm comm) {
 	return ret.str();
 }
 
+std::string reformatJSON(const std::string& info) {
+	std::string info_formated;
+	int ind = 0;
+	bool in_quote = false;
+	int nl_after = -1;
+	int nl_before = -1;
+	bool space_after = false;
+	bool hold_nl = false;
+	for (size_t i = 0; i < info.size(); i++) {
+		char c = info[i];
+		if (in_quote) {
+			if (c == '"') in_quote = false;
+		} else if (c == '"') {
+			in_quote = true;
+		} else if (c == ' ') {
+			continue;
+		} else if (c == ':') {
+			space_after = true;
+		} else if (c == '{') {
+			if (hold_nl) {
+				nl_before = ind;
+				hold_nl = false;
+			}
+			ind++;
+			nl_after = ind;
+		} else if (c == '}') {
+			ind--;
+			nl_before = ind;
+		} else if (c == '[') {
+			ind++;
+			hold_nl = ind;
+		} else if (c == ']') {
+			ind--;
+			if (hold_nl) hold_nl = false; else nl_before = ind;
+		} else if (c == ',') {
+			if (hold_nl) space_after = true; else nl_after = ind;
+		}
+		if (nl_before >= 0) {
+			info_formated.push_back('\n');
+			for (int j = 0; j<nl_before*2; j++) info_formated.push_back(' ');
+			nl_before = -1;
+		}
+		info_formated.push_back(c);
+		if (nl_after >= 0) {
+			info_formated.push_back('\n');
+			for (int j = 0; j<nl_after*2; j++) info_formated.push_back(' ');
+			nl_after = -1;
+		}
+		if (space_after) {
+			info_formated.push_back(' ');
+			space_after = false;
+		}
+	}
+	return info_formated;
+}
+
+
 int main ( int argc, char * argv[] )
 {
 	MPI_Init(&argc, &argv);
@@ -174,7 +233,9 @@ int main ( int argc, char * argv[] )
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
 
-	std::string info = nodesJSON(comm);
-	if (rank == 0) printf("%s\n", info.c_str());
+	std::string info = nodesJSON(comm, true);
+	if (rank == 0) {
+		printf("%s\n", reformatJSON(info).c_str());
+	}
 	MPI_Finalize();
 }
