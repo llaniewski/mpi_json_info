@@ -1,7 +1,9 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <mpi.h>
 #include <vector>
 #include <fstream>
+#include <cerrno>
 #include "glue.hpp"
 
 std::string nodeName(MPI_Comm comm) {
@@ -11,34 +13,41 @@ std::string nodeName(MPI_Comm comm) {
 	int cpname_len;
 	char cpname[MPI_MAX_PROCESSOR_NAME];
 	MPI_Get_processor_name(cpname, &cpname_len);
-	if (rank > 2) {
+/*	if (rank > 2) {
 		cpname[cpname_len] = 'T';
 		cpname[cpname_len+1] = 'M';
 		cpname[cpname_len+2] = '\0';
 		cpname_len += 2;
-	} else {
+	} else { */
 		cpname[cpname_len] = '\0';
-	}
+/*	} */
 	return std::string(cpname, cpname_len);
 }
 
 std::string cpuJSON() {
 	Glue ret(", ","{ ", " }");
-	Glue cores(", ","{ ", " }");
-	Glue physical(", ","{ ", " }");
+	Glue physicalid(", ","[ ", " ]");
+	Glue coreid(", ","[ ", " ]");
+	Glue cpus(", ","[ ", " ]");
 	std::ifstream f("/proc/cpuinfo");
 	if (f.fail()) {
 		ret << "\"error\": \"/proc/cpuinfo: " << strerror(errno) << "\"";
 	} else {
-		std::string corename = "unknown";
-		Glue core(", ","{ ", " }");
-		//std::string cpuname = "unknown";
-		//std::string cpu;
+		std::string cpuname = "-1";
+		std::string corename = "-1";
+		int cpunumber = -1;
+		Glue cpu(", ","{ ", " }");
 		std::string line;
 		while (std::getline(f, line)) {
 			if (line == "") {
-				cores << "\"" + corename + "\": " + core.str();
-				core.clear();
+				physicalid << cpuname;
+				coreid << corename;
+				int k = atoi(cpuname.c_str());
+				if (k > cpunumber) {
+					cpus << cpu.str();
+					cpunumber = k;
+				}
+				cpu.clear();
 			} else {
 				size_t i,j;
 				i = line.find(":");
@@ -47,27 +56,28 @@ std::string cpuJSON() {
 				if (i < line.size()-1) i++;
 				std::string tag = line.substr(0,j);
 				std::string val = line.substr(i+1,line.size()-i-1);
-				if (tag == "processor") {
-					corename = val;
-					core << "\"number\": " + val;
-				} else if (tag == "model name") {
-					core << "\"name\": \"" + val + "\"";
+				if (tag == "model name") {
+					cpu << "\"name\": \"" + val + "\"";
 				} else if (tag == "physical id") {
-					core << "\"physical\": " + val;
+					cpuname = val;
 				} else if (tag == "cache size") {
-					core << "\"cache\": \"" + val + "\"";
+					cpu << "\"cache\": \"" + val + "\"";
+				} else if (tag == "cpu cores") {
+					cpu << "\"cores\": \"" + val + "\"";
+				} else if (tag == "core id") {
+					corename = val;
 				} else if (tag == "ventor id") {
-					core << "\"ventor\": \"" + val + "\"";
+					cpu << "\"ventor\": \"" + val + "\"";
 				} else if (tag == "siblings") {
-					core << "\"siblings\": \"" + val + "\"";
-				} else if (tag == "cpu MHz") {
-					core << "\"freq\": " + val;
+					cpu << "\"vcores\": \"" + val + "\"";
 				}
 			}
 		}
 		f.close();
 	}
-	ret << "\"cores\": " + cores.str();
+	ret << "\"vcore_to_cpu\": " + physicalid.str();
+	ret << "\"vcore_to_core\": " + coreid.str();
+	ret << "\"cpus\": " + cpus.str();
 	return ret.str();
 }
 
@@ -87,28 +97,30 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 }
 
 std::string nodesJSON(MPI_Comm comm) {
-	std::string ret = "{ ";
+	Glue nodes(", ", "[ ", " ]");
 	int rank, size;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
 	std::string pname = nodeName(comm);
 	int wrank = rank;
 	int firstrank = 0;
+	int mynode = -1;
+	int i = 0;
 	while (true) {
 		std::string otherpname = MPI_Bcast(pname, firstrank, comm);
 		if (otherpname == pname) {
 			wrank = size;
+			mynode = i;
 		}
 		std::string nodejson;
 		if (rank == firstrank) nodejson = nodeJSON(comm);
 		nodejson = MPI_Bcast(nodejson, firstrank, comm);
-		ret = ret + "\"" + otherpname + "\": " + nodejson;
+		nodes << nodejson;
+		i++;
 		MPI_Allreduce(&wrank, &firstrank, 1, MPI_INT, MPI_MIN, comm );
 		if (firstrank >= size) break;
-		ret = ret + ", ";
 	}
-	ret = ret + " }";
-	return ret;
+	return nodes.str();
 }
 
 
