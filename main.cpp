@@ -7,20 +7,9 @@
 #include "glue.hpp"
 
 std::string nodeName(MPI_Comm comm) {
-	int rank, size;
-	MPI_Comm_rank(comm, &rank);
-	MPI_Comm_size(comm, &size);
 	int cpname_len;
 	char cpname[MPI_MAX_PROCESSOR_NAME];
 	MPI_Get_processor_name(cpname, &cpname_len);
-/*	if (rank > 2) {
-		cpname[cpname_len] = 'T';
-		cpname[cpname_len+1] = 'M';
-		cpname[cpname_len+2] = '\0';
-		cpname_len += 2;
-	} else { */
-		cpname[cpname_len] = '\0';
-/*	} */
 	return std::string(cpname, cpname_len);
 }
 
@@ -156,7 +145,9 @@ std::string nodesJSON(MPI_Comm comm) {
 	}
 	std::string procjson = procJSON(mynode);
 	for (int i=0; i<size; i++) {
-		ranks << MPI_Bcast(procjson, i, comm);
+		std::string otherproc;
+		otherproc = MPI_Bcast(procjson, i, comm);
+		ranks << otherproc;
 	}
 	ret << "\"ranks\": " + ranks.str();
 	ret << "\"nodes\": " + nodes.str();
