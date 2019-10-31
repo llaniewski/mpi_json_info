@@ -1,14 +1,8 @@
 #ifndef MPI_JSON_INFO_H
 #define MPI_JSON_INFO_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <mpi.h>
-#include <vector>
-#include <fstream>
-#include <cerrno>
-#include "glue.hpp"
+#include <string>
 
 std::string nodeName(MPI_Comm comm);
 std::string cpuJSON();

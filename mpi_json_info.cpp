@@ -1,7 +1,7 @@
+#include "mpi_json_info.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <mpi.h>
 #include <vector>
 #include <fstream>
 #include <cerrno>
