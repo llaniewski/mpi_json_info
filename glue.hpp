@@ -20,7 +20,7 @@ public:
         s << std::scientific;
         empty = true;
     }
-    inline Glue(std::string sep_, std::string begin_, std::string end_) : sep(sep_), begin(begin_), end(end_) {
+    inline Glue(std::string sep_, std::string begin_="", std::string end_="") : sep(sep_), begin(begin_), end(end_) {
         s << std::setprecision(14);
         s << std::scientific;
         empty = true;

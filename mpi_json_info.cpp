@@ -6,6 +6,10 @@
 #include <fstream>
 #include <cerrno>
 #include "glue.hpp"
+#ifdef CROSS_GPU
+	#include <cuda.h>
+	#include <cuda_runtime.h>
+#endif
 
 std::string nodeName(MPI_Comm comm) {
 	int cpname_len;
@@ -14,11 +18,50 @@ std::string nodeName(MPI_Comm comm) {
 	return std::string(cpname, cpname_len);
 }
 
+std::string gpuJSON() {
+	Glue ret(", ","{ ", " }");
+#ifdef CROSS_GPU
+	cudaError_t status;
+	int ngpus;
+	Glue gpus(", ","[ ", " ]");
+	status = cudaGetDeviceCount(&ngpus);
+	if (status) {
+		ret << "\"error\": \"cudaGetDeviceCount failed\"";
+	} else {
+		for (int i=0; i<ngpus; i++) {
+			Glue gpu(", ","{ ", " }");
+			cudaDeviceProp prop;
+			status = cudaGetDeviceProperties(&prop, i);
+			if (status) gpu << "\"error\": \"cudaGetDeviceProperties failed\"";
+			gpu << (Glue() << "\"name\": \"" << prop.name << "\"").str();  
+			gpu << (Glue() << "\"totalGlobalMem\": " << prop.totalGlobalMem).str();
+			gpu << (Glue() << "\"sharedMemPerBlock\": " << prop.sharedMemPerBlock).str();
+			Glue version(", ","{ ", " }");
+			version << (Glue() << "\"major\": " << prop.major).str();
+			version << (Glue() << "\"minor\": " << prop.minor).str();
+			gpu << (Glue() << "\"version\": " << version.str()).str();
+			gpu << (Glue() << "\"clockRate\": " << prop.clockRate).str();
+			gpu << (Glue() << "\"multiProcessorCount\": " << prop.multiProcessorCount).str();
+			gpu << (Glue() << "\"ECCEnabled\": " << (prop.ECCEnabled ? "true" : "false")).str();
+			gpus << gpu.str();
+		}
+		ret << (Glue() << "\"gpus:\": " << ngpus).str();
+		ret << "\"gpu:\": " + gpus.str();
+	}
+#else
+	ret << "\"gpus\": 0";
+	ret << "\"warning\": \"compiled without CUDA\"";
+#endif
+	return ret.str();
+}
+
 std::string cpuJSON() {
 	Glue ret(", ","{ ", " }");
 	Glue physicalid(", ","[ ", " ]");
 	Glue coreid(", ","[ ", " ]");
 	Glue cpus(", ","[ ", " ]");
+	int ncores=0;
+	int ncpu=0;
 	std::ifstream f("/proc/cpuinfo");
 	if (f.fail()) {
 		std::string err = strerror(errno);
@@ -31,10 +74,12 @@ std::string cpuJSON() {
 		std::string line;
 		while (std::getline(f, line)) {
 			if (line == "") {
+				ncores++;
 				physicalid << cpuname;
 				coreid << corename;
 				int k = atoi(cpuname.c_str());
 				if (k > cpunumber) {
+					ncpu++;
 					cpus << cpu.str();
 					cpunumber = k;
 				}
@@ -66,14 +111,20 @@ std::string cpuJSON() {
 		}
 		f.close();
 	}
+	ret << (Glue() << "\"vcores\": " << ncores).str();
+	ret << (Glue() << "\"cpus\": " << ncpu).str();
 	ret << "\"vcore_to_cpu\": " + physicalid.str();
 	ret << "\"vcore_to_core\": " + coreid.str();
-	ret << "\"cpus\": " + cpus.str();
+	ret << "\"cpu\": " + cpus.str();
 	return ret.str();
 }
 
 std::string nodeJSON(MPI_Comm comm) {
-	return "{ \"name\": \"" + nodeName(comm) + "\", \"cpu\": " + cpuJSON() + " }";
+	Glue ret(", ","{ ", " }");
+	ret << "\"name\": \"" + nodeName(comm) + "\"";
+	ret << "\"cpu\": " + cpuJSON();
+	ret << "\"gpu\": " + gpuJSON();
+	return ret.str();
 }
 
 std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
@@ -120,6 +171,17 @@ std::pair< std::string, int > procJSON(int node) {
 	return std::make_pair( ret.str(), core );
 }
 
+int gpuNumber() {
+#ifdef CROSS_GPU
+	int dev = -1;
+	cudaError_t status = cudaGetDevice(&dev);
+	if (status == cudaSuccess) return dev;
+	if (status == cudaErrorNoDevice) return -1;
+	return -2;
+#endif
+	return -3;
+}
+
 std::string nodesJSON(MPI_Comm comm, bool detailed) {
 	Glue nodes(", ", "[ ", " ]");
 	Glue ret(", ", "{ ", " }");
@@ -157,13 +219,15 @@ std::string nodesJSON(MPI_Comm comm, bool detailed) {
 		}
 		ret << "\"ranks\": " + ranks.str();
 	}
-	
+	int mygpu = gpuNumber();
 	int* perrank = NULL;
 	if (rank == 0) perrank = new int[size];
 	MPI_Gather(&core, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
 	if (rank == 0) ret << "\"rank_to_vcore\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
 	MPI_Gather(&mynode, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
 	if (rank == 0) ret << "\"rank_to_node\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	MPI_Gather(&mygpu, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
+	if (rank == 0) ret << "\"rank_to_gpu\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
 	if (rank == 0) delete[] perrank;
 	ret << "\"nodes\": " + nodes.str();
 	return ret.str();
