@@ -112,7 +112,7 @@ std::pair< std::string, int > procJSON(int node) {
 				ret << "\"starttime\": \"" + line + "\"";
 			} else if (i == 23) {
 				ret << "\"vsize\": \"" + line + "\"";
-			}						
+			}
 		}
 		f.close();
 	}
@@ -121,7 +121,6 @@ std::pair< std::string, int > procJSON(int node) {
 
 std::string nodesJSON(MPI_Comm comm) {
 	Glue nodes(", ", "[ ", " ]");
-	Glue ranks(", ", "[ ", " ]");
 	Glue ret(", ", "{ ", " }");
 	int rank, size;
 	MPI_Comm_rank(comm, &rank);
@@ -148,17 +147,21 @@ std::string nodesJSON(MPI_Comm comm) {
 	std::pair< std::string, int > procjson = procJSON(mynode);
 	int core = procjson.second;
 	if (false) {
+		Glue ranks(", ", "[ ", " ]");
 		for (int i=0; i<size; i++) {
 			std::string otherproc;
-			otherproc = MPI_Bcast(procjson, i, comm);
+			otherproc = MPI_Bcast(procjson.first, i, comm);
 			ranks << otherproc;
 		}
+		ret << "\"ranks\": " + ranks.str();
 	}
-	int cores = new int[size];
-	MPI_Gather(&core, 1, MPI_INT, &cores, 1, MPI_INT, 0, comm);
-	if (rank == 0) ret << "\"rank_to_vcore\": " + (Glue(", ", "[ ", " ]") << std::make_pair(cores,size)).str();
-	delete[] cores;
-	ret << "\"ranks\": " + ranks.str();
+	int* perrank = NULL;
+	if (rank == 0) perrank = new int[size];
+	MPI_Gather(&core, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
+	if (rank == 0) ret << "\"rank_to_vcore\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	MPI_Gather(&mynode, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
+	if (rank == 0) ret << "\"rank_to_node\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	if (rank == 0) delete[] perrank;
 	ret << "\"nodes\": " + nodes.str();
 	return ret.str();
 }
