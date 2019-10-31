@@ -31,7 +31,8 @@ std::string cpuJSON() {
 	Glue cpus(", ","[ ", " ]");
 	std::ifstream f("/proc/cpuinfo");
 	if (f.fail()) {
-		ret << "\"error\": \"/proc/cpuinfo: " << strerror(errno) << "\"";
+		std::string err = strerror(errno);
+		ret << "\"error\": \"/proc/cpuinfo: " + err + "\"";
 	} else {
 		std::string cpuname = "-1";
 		std::string corename = "-1";
@@ -96,6 +97,37 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 	return ret;
 }
 
+std::string procJSON(int node) {
+	Glue ret(", ", "{ ", " }");
+	ret << (Glue() << "\"node\": " << node).str();
+	std::ifstream f("/proc/self/stat");
+	if (f.fail()) {
+		std::string err = strerror(errno);
+		ret << "\"error\": \"/proc/self/stat: " + err + "\"";
+	} else {
+		std::string line;
+		int i = 0;
+		while (std::getline(f, line, ' ')) {
+			i++;
+			if (i == 1) {
+				ret << "\"pid\": " + line;
+			} else if (i == 14) {
+				ret << "\"utime\": \"" + line + "\"";
+			} else if (i == 15) {
+				ret << "\"stime\": \"" + line + "\"";
+			} else if (i == 22) {
+				ret << "\"starttime\": \"" + line + "\"";
+			} else if (i == 23) {
+				ret << "\"vsize\": \"" + line + "\"";
+			} else if (i == 39) {
+				ret << "\"vcore\": " + line;
+			}						
+		}
+		f.close();
+	}
+	return ret.str();
+}
+
 std::string nodesJSON(MPI_Comm comm) {
 	Glue nodes(", ", "[ ", " ]");
 	Glue ranks(", ", "[ ", " ]");
@@ -122,8 +154,12 @@ std::string nodesJSON(MPI_Comm comm) {
 		MPI_Allreduce(&wrank, &firstrank, 1, MPI_INT, MPI_MIN, comm );
 		if (firstrank >= size) break;
 	}
-	ret << "\"ranks\": " << ranks.str();
-	ret << "\"nodes\": " << nodes.str();
+	std::string procjson = procJSON(mynode);
+	for (int i=0; i<size; i++) {
+		ranks << MPI_Bcast(procjson, i, comm);
+	}
+	ret << "\"ranks\": " + ranks.str();
+	ret << "\"nodes\": " + nodes.str();
 	return ret.str();
 }
 
