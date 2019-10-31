@@ -25,24 +25,31 @@ std::string gpuJSON() {
 	int ngpus;
 	Glue gpus(", ","[ ", " ]");
 	status = cudaGetDeviceCount(&ngpus);
-	if (status) {
-		ret << "\"error\": \"cudaGetDeviceCount failed\"";
+	if (status == cudaErrorNoDevice) {
+		ngpus = 0;
+		status = cudaSuccess;
+	}
+	if (status != cudaSuccess) {
+		ret << (Glue() << "\"error\": \"cudaGetDeviceCount: " << cudaGetErrorString(status) << "\"").str();
 	} else {
 		for (int i=0; i<ngpus; i++) {
 			Glue gpu(", ","{ ", " }");
 			cudaDeviceProp prop;
 			status = cudaGetDeviceProperties(&prop, i);
-			if (status) gpu << "\"error\": \"cudaGetDeviceProperties failed\"";
-			gpu << (Glue() << "\"name\": \"" << prop.name << "\"").str();  
-			gpu << (Glue() << "\"totalGlobalMem\": " << prop.totalGlobalMem).str();
-			gpu << (Glue() << "\"sharedMemPerBlock\": " << prop.sharedMemPerBlock).str();
-			Glue version(", ","{ ", " }");
-			version << (Glue() << "\"major\": " << prop.major).str();
-			version << (Glue() << "\"minor\": " << prop.minor).str();
-			gpu << (Glue() << "\"version\": " << version.str()).str();
-			gpu << (Glue() << "\"clockRate\": " << prop.clockRate).str();
-			gpu << (Glue() << "\"multiProcessorCount\": " << prop.multiProcessorCount).str();
-			gpu << (Glue() << "\"ECCEnabled\": " << (prop.ECCEnabled ? "true" : "false")).str();
+			if (status != cudaSuccess) {
+				gpu << (Glue() << "\"error\": \"cudaGetDeviceProperties: " << cudaGetErrorString(status) << "\"").str();
+			} else {
+				gpu << (Glue() << "\"name\": \"" << prop.name << "\"").str();  
+				gpu << (Glue() << "\"totalGlobalMem\": " << prop.totalGlobalMem).str();
+				gpu << (Glue() << "\"sharedMemPerBlock\": " << prop.sharedMemPerBlock).str();
+				Glue version(", ","{ ", " }");
+				version << (Glue() << "\"major\": " << prop.major).str();
+				version << (Glue() << "\"minor\": " << prop.minor).str();
+				gpu << (Glue() << "\"version\": " << version.str()).str();
+				gpu << (Glue() << "\"clockRate\": " << prop.clockRate).str();
+				gpu << (Glue() << "\"multiProcessorCount\": " << prop.multiProcessorCount).str();
+				gpu << (Glue() << "\"ECCEnabled\": " << (prop.ECCEnabled ? "true" : "false")).str();
+			}
 			gpus << gpu.str();
 		}
 		ret << (Glue() << "\"gpus:\": " << ngpus).str();
