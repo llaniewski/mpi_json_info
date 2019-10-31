@@ -86,7 +86,8 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 	return ret;
 }
 
-std::string procJSON(int node) {
+std::pair< std::string, int > procJSON(int node) {
+	int core = -1;
 	Glue ret(", ", "{ ", " }");
 	ret << (Glue() << "\"node\": " << node).str();
 	std::ifstream f("/proc/self/stat");
@@ -98,7 +99,10 @@ std::string procJSON(int node) {
 		int i = 0;
 		while (std::getline(f, line, ' ')) {
 			i++;
-			if (i == 1) {
+			if (i == 39) {
+				core = atoi(line.c_str());
+				ret << "\"vcore\": " + line;
+			} else if (i == 1) {
 				ret << "\"pid\": " + line;
 			} else if (i == 14) {
 				ret << "\"utime\": \"" + line + "\"";
@@ -108,13 +112,11 @@ std::string procJSON(int node) {
 				ret << "\"starttime\": \"" + line + "\"";
 			} else if (i == 23) {
 				ret << "\"vsize\": \"" + line + "\"";
-			} else if (i == 39) {
-				ret << "\"vcore\": " + line;
 			}						
 		}
 		f.close();
 	}
-	return ret.str();
+	return std::make_pair( ret.str(), core );
 }
 
 std::string nodesJSON(MPI_Comm comm) {
@@ -143,12 +145,19 @@ std::string nodesJSON(MPI_Comm comm) {
 		MPI_Allreduce(&wrank, &firstrank, 1, MPI_INT, MPI_MIN, comm );
 		if (firstrank >= size) break;
 	}
-	std::string procjson = procJSON(mynode);
-	for (int i=0; i<size; i++) {
-		std::string otherproc;
-		otherproc = MPI_Bcast(procjson, i, comm);
-		ranks << otherproc;
+	std::pair< std::string, int > procjson = procJSON(mynode);
+	int core = procjson.second;
+	if (false) {
+		for (int i=0; i<size; i++) {
+			std::string otherproc;
+			otherproc = MPI_Bcast(procjson, i, comm);
+			ranks << otherproc;
+		}
 	}
+	int cores = new int[size];
+	MPI_Gather(&core, 1, MPI_INT, &cores, 1, MPI_INT, 0, comm);
+	if (rank == 0) ret << "\"rank_to_vcore\": " + (Glue(", ", "[ ", " ]") << std::make_pair(cores,size)).str();
+	delete[] cores;
 	ret << "\"ranks\": " + ranks.str();
 	ret << "\"nodes\": " + nodes.str();
 	return ret.str();
