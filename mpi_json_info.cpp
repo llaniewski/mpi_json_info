@@ -10,6 +10,9 @@
 	#include <cuda.h>
 	#include <cuda_runtime.h>
 #endif
+#ifdef __GLIBC__
+	#include <gnu/libc-version.h>
+#endif
 
 std::string nodeName(MPI_Comm comm) {
 	int cpname_len;
@@ -42,10 +45,7 @@ std::string gpuJSON() {
 				gpu << (Glue() << "\"name\": \"" << prop.name << "\"").str();  
 				gpu << (Glue() << "\"totalGlobalMem\": " << prop.totalGlobalMem).str();
 				gpu << (Glue() << "\"sharedMemPerBlock\": " << prop.sharedMemPerBlock).str();
-				Glue version(", ","{ ", " }");
-				version << (Glue() << "\"major\": " << prop.major).str();
-				version << (Glue() << "\"minor\": " << prop.minor).str();
-				gpu << (Glue() << "\"version\": " << version.str()).str();
+				gpu << (Glue() << "\"version\": " << versionJSON(prop.major,prop.minor)).str();
 				gpu << (Glue() << "\"clockRate\": " << prop.clockRate).str();
 				gpu << (Glue() << "\"multiProcessorCount\": " << prop.multiProcessorCount).str();
 				gpu << (Glue() << "\"ECCEnabled\": " << (prop.ECCEnabled ? "true" : "false")).str();
@@ -256,6 +256,12 @@ std::string reformatJSON(const std::string& info) {
 			in_quote = true;
 		} else if (c == ' ') {
 			continue;
+		} else if (c == '\t') {
+			continue;
+		} else if (c == '\n') {
+			continue;
+		} else if (c == '\r') {
+			continue;
 		} else if (c == ':') {
 			space_after = true;
 		} else if (c == '{') {
@@ -296,3 +302,129 @@ std::string reformatJSON(const std::string& info) {
 	return info_formated;
 }
 
+
+std::string stripJSON(const std::string& info) {
+	std::string info_formated;
+	bool in_quote = false;
+	for (size_t i = 0; i < info.size(); i++) {
+		char c = info[i];
+		if (in_quote) {
+			if (c == '"') in_quote = false;
+		} else if (c == '"') {
+			in_quote = true;
+		} else if (c == ' ') {
+			continue;
+		} else if (c == '\t') {
+			continue;
+		} else if (c == '\n') {
+			continue;
+		} else if (c == '\r') {
+			continue;
+		}
+		info_formated.push_back(c);
+	}
+	return info_formated;
+}
+
+std::string versionJSON(const int& major, const int& minor) {
+	Glue ret(", ", "{ ", " }");
+	ret << (Glue() << "\"major\": " << major).str();
+	ret << (Glue() << "\"minor\": " << minor).str();
+	return ret.str();
+}
+
+std::string libJSON(const std::string& name, const int& major, const int& minor) {
+	Glue ret(", ", "{ ", " }");
+	ret << "\"name\": \"" + name + "\"";
+	ret << "\"version\": " + versionJSON(major, minor);
+	return ret.str();
+}
+
+std::string CUDAlibJSON(const int& version) {
+	int major = version/1000;
+	int minor = (version - major*1000)/10;
+	const std::string name = "CUDA";
+	Glue ret(", ", "{ ", " }");
+	ret << "\"name\": \"" + name + "\"";
+	ret << "\"version\": " + versionJSON(major, minor);
+	return ret.str();
+}
+
+std::string compilationJSON() {
+	Glue ret(", ", "{ ", " }");
+	std::string val;
+
+	val = "null";
+#ifdef __linux__
+	val = "\"linux\"";
+#endif
+#ifdef _WIN32
+	val = "\"windows\"";
+#endif
+	ret << "\"os\": " + val;
+
+	val = "null";
+#ifdef __GNUC__
+	val = libJSON("gcc",__GNUC__,__GNUC_MINOR__);
+#endif
+#ifdef __clang__
+	val = libJSON("clang",__clang_major__,__clang_minor__);
+#endif
+#ifdef __EMSCRIPTEN__
+	val = libJSON("emscripten",0,0);
+#endif
+#ifdef __MINGW32__
+	val = libJSON("MinWG32",__MINGW32_MAJOR_VERSION,__MINGW32_MINOR_VERSION);
+#endif
+#ifdef __MINGW64__
+	val = libJSON("MinWG64",__MINGW64_MAJOR_VERSION,__MINGW64_MINOR_VERSION);
+#endif
+	ret << "\"compiler\": " + val;
+
+#ifdef __GLIBC__
+	val = libJSON("glibc",__GLIBC__,__GLIBC_MINOR__);
+#endif
+	ret << "\"glibc\": " + val;
+
+#ifdef CROSS_GPU
+	val = CUDAlibJSON(CUDART_VERSION);
+#endif
+	ret << "\"cuda\": " + val;
+
+	return ret.str();
+}
+
+std::string runtimeJSON() {
+	Glue ret(", ", "{ ", " }");
+	std::string val,name;
+	int major, minor;
+	Glue fragment(", ", "{ ", " }");
+
+	val = "null";
+#ifdef __GLIBC__
+	val = gnu_get_libc_version();
+	val = "\"" + val + "\"";
+#endif
+	ret << "\"glibc\": " + val;
+
+	val = "null";
+#ifdef CROSS_GPU
+	{
+		int ver;
+		cudaRuntimeGetVersion(&ver);
+		val = CUDAlibJSON(ver);
+	}
+#endif
+	ret << "\"cuda_runtime\": " + val;
+	val = "null";
+#ifdef CROSS_GPU
+	{
+		int ver;
+		cudaDriverGetVersion(&ver);
+		val = CUDAlibJSON(ver);
+	}
+#endif
+	ret << "\"cuda_driver\": " + val;
+
+	return ret.str();
+}
