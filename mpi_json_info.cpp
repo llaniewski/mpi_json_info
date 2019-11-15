@@ -381,11 +381,13 @@ std::string compilationJSON() {
 #endif
 	ret << "\"compiler\": " + val;
 
+	val = "null";
 #ifdef __GLIBC__
 	val = libJSON("glibc",__GLIBC__,__GLIBC_MINOR__);
 #endif
 	ret << "\"glibc\": " + val;
 
+	val = "null";
 #ifdef CROSS_GPU
 	val = CUDAlibJSON(CUDART_VERSION);
 #endif

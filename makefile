@@ -1,7 +1,7 @@
 CC=g++
 
 CPPFLAGS = -I/usr/local/cuda/include -I/usr/include/mpi -O3 -Wno-write-strings
-LDFLAGS = -L/usr/local/cuda/lib64 -L/usr/lib/openmpi/lib -lmpi -lmpi_cxx -lm
+LDFLAGS = -L/usr/local/cuda/lib64 -L/usr/lib/openmpi/lib -lmpi -lm -L/net/software/local/cuda/9.0/lib64/
 
 all : main
 gpu : main
