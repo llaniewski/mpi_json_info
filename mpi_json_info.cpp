@@ -21,63 +21,64 @@ std::string nodeName(MPI_Comm comm) {
 	return std::string(cpname, cpname_len);
 }
 
-std::string gpuJSON() {
-	Glue ret(", ","{ ", " }");
+JSON gpuJSON() {
+	JSONobject ret;
 #ifdef CROSS_GPU
 	cudaError_t status;
 	int ngpus;
-	Glue gpus(", ","[ ", " ]");
+	JSONarray gpus;
 	status = cudaGetDeviceCount(&ngpus);
 	if (status == cudaErrorNoDevice) {
 		ngpus = 0;
 		status = cudaSuccess;
 	}
 	if (status != cudaSuccess) {
-		ret << (Glue() << "\"error\": \"cudaGetDeviceCount: " << cudaGetErrorString(status) << "\"").str();
+		ret << "error" << Glue::colon() << std::string("cudaGetDeviceCount: ") + std::string(cudaGetErrorString(status));
 	} else {
 		for (int i=0; i<ngpus; i++) {
-			Glue gpu(", ","{ ", " }");
+			JSONobject gpu;
 			cudaDeviceProp prop;
 			status = cudaGetDeviceProperties(&prop, i);
 			if (status != cudaSuccess) {
-				gpu << (Glue() << "\"error\": \"cudaGetDeviceProperties: " << cudaGetErrorString(status) << "\"").str();
+				gpu << "error" << Glue::colon() << std::string("cudaGetDeviceProperties: ") + std::string(cudaGetErrorString(status));
 			} else {
-				gpu << (Glue() << "\"name\": \"" << prop.name << "\"").str();  
-				gpu << (Glue() << "\"totalGlobalMem\": " << prop.totalGlobalMem).str();
-				gpu << (Glue() << "\"sharedMemPerBlock\": " << prop.sharedMemPerBlock).str();
-				gpu << (Glue() << "\"version\": " << versionJSON(prop.major,prop.minor)).str();
-				gpu << (Glue() << "\"clockRate\": " << prop.clockRate).str();
-				gpu << (Glue() << "\"multiProcessorCount\": " << prop.multiProcessorCount).str();
-				gpu << (Glue() << "\"ECCEnabled\": " << (prop.ECCEnabled ? "true" : "false")).str();
+				gpu << "name" << Glue::colon() << std::string(prop.name);
+				gpu << "totalGlobalMem" << Glue::colon() << prop.totalGlobalMem;
+				gpu << "sharedMemPerBlock" << Glue::colon() << prop.sharedMemPerBlock;
+				gpu << "version" << Glue::colon() << versionJSON(prop.major,prop.minor);
+				gpu << "clockRate" << Glue::colon() << prop.clockRate;
+				gpu << "multiProcessorCount" << Glue::colon() << prop.multiProcessorCount;
+				gpu << "ECCEnabled" << Glue::colon() << Glue::neverquote(prop.ECCEnabled ? "true" : "false");
 			}
 			gpus << gpu.str();
 		}
-		ret << (Glue() << "\"gpus:\": " << ngpus).str();
-		ret << "\"gpu:\": " + gpus.str();
+		ret << "gpus:" << Glue::colon() << ngpus;
+		ret << "gpu:"  << Glue::colon() << gpus.str();
 	}
 #else
-	ret << "\"gpus\": 0";
-	ret << "\"warning\": \"compiled without CUDA\"";
+	ret << "gpus" << Glue::colon() << 0;
+	ret << "gpu" << Glue::colon() << JSONarray().str();
+	ret << "warning:" << Glue::colon() << "compiled without CUDA";
 #endif
 	return ret.str();
 }
 
-std::string cpuJSON() {
-	Glue ret(", ","{ ", " }");
-	Glue physicalid(", ","[ ", " ]");
-	Glue coreid(", ","[ ", " ]");
-	Glue cpus(", ","[ ", " ]");
+JSON cpuJSON() {
+	JSONobject ret;
+	JSONarray physicalid;
+	JSONarray coreid;
+	JSONarray cpus;
 	int ncores=0;
 	int ncpu=0;
 	std::ifstream f("/proc/cpuinfo");
 	if (f.fail()) {
 		std::string err = strerror(errno);
-		ret << "\"error\": \"/proc/cpuinfo: " + err + "\"";
+		ret << "error" << Glue::colon() << std::string("/proc/cpuinfo: ") + std::string(err);
 	} else {
-		std::string cpuname = "-1";
-		std::string corename = "-1";
+		Glue::neverquote cpuname = "-1";
+		Glue::neverquote corename = "-1";
 		int cpunumber = -1;
-		Glue cpu(", ","{ ", " }");
+		JSONobject cpu;
 		std::string line;
 		while (std::getline(f, line)) {
 			if (line == "") {
@@ -100,37 +101,37 @@ std::string cpuJSON() {
 				std::string tag = line.substr(0,j);
 				std::string val = line.substr(i+1,line.size()-i-1);
 				if (tag == "model name") {
-					cpu << "\"name\": \"" + val + "\"";
+					cpu << "name" << Glue::colon() << val ;
 				} else if (tag == "physical id") {
 					cpuname = val;
 				} else if (tag == "cache size") {
-					cpu << "\"cache\": \"" + val + "\"";
+					cpu << "cache" << Glue::colon() << val ;
 				} else if (tag == "cpu cores") {
-					cpu << "\"cores\": \"" + val + "\"";
+					cpu << "cores" << Glue::colon() << Glue::neverquote(val) ;
 				} else if (tag == "core id") {
 					corename = val;
 				} else if (tag == "ventor id") {
-					cpu << "\"ventor\": \"" + val + "\"";
+					cpu << "ventor" << Glue::colon() << val ;
 				} else if (tag == "siblings") {
-					cpu << "\"vcores\": \"" + val + "\"";
+					cpu << "vcores" << Glue::colon() << Glue::neverquote(val) ;
 				}
 			}
 		}
 		f.close();
 	}
-	ret << (Glue() << "\"vcores\": " << ncores).str();
-	ret << (Glue() << "\"cpus\": " << ncpu).str();
-	ret << "\"vcore_to_cpu\": " + physicalid.str();
-	ret << "\"vcore_to_core\": " + coreid.str();
-	ret << "\"cpu\": " + cpus.str();
+	ret << "vcores" << Glue::colon() << ncores;
+	ret << "cpus" << Glue::colon() << ncpu;
+	ret << "vcore_to_cpu" << Glue::colon() << physicalid.str();
+	ret << "vcore_to_core" << Glue::colon() << coreid.str();
+	ret << "cpu" << Glue::colon() << cpus.str();
 	return ret.str();
 }
 
-std::string nodeJSON(MPI_Comm comm) {
-	Glue ret(", ","{ ", " }");
-	ret << "\"name\": \"" + nodeName(comm) + "\"";
-	ret << "\"cpu\": " + cpuJSON();
-	ret << "\"gpu\": " + gpuJSON();
+JSON nodeJSON(MPI_Comm comm) {
+	JSONobject ret;
+	ret << "name" << Glue::colon() << nodeName(comm) ;
+	ret << "cpu" << Glue::colon() <<cpuJSON();
+	ret << "gpu" << Glue::colon() <<gpuJSON();
 	return ret.str();
 }
 
@@ -145,14 +146,14 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 	return ret;
 }
 
-std::pair< std::string, int > procJSON(int node) {
+std::pair< JSON, int > procJSON(int node) {
 	int core = -1;
-	Glue ret(", ", "{ ", " }");
-	ret << (Glue() << "\"node\": " << node).str();
+	JSONobject ret;
+	ret << "node" << Glue::colon() << node;
 	std::ifstream f("/proc/self/stat");
 	if (f.fail()) {
 		std::string err = strerror(errno);
-		ret << "\"error\": \"/proc/self/stat: " + err + "\"";
+		ret << "error" << Glue::colon() << std::string("/proc/self/stat: ") + std::string(err) ;
 	} else {
 		std::string line;
 		int i = 0;
@@ -160,17 +161,17 @@ std::pair< std::string, int > procJSON(int node) {
 			i++;
 			if (i == 39) {
 				core = atoi(line.c_str());
-				ret << "\"vcore\": " + line;
+				ret << "vcore" << Glue::colon() <<line;
 			} else if (i == 1) {
-				ret << "\"pid\": " + line;
+				ret << "pid" << Glue::colon() <<line;
 			} else if (i == 14) {
-				ret << "\"utime\": \"" + line + "\"";
+				ret << "utime" << Glue::colon() << line ;
 			} else if (i == 15) {
-				ret << "\"stime\": \"" + line + "\"";
+				ret << "stime" << Glue::colon() << line ;
 			} else if (i == 22) {
-				ret << "\"starttime\": \"" + line + "\"";
+				ret << "starttime" << Glue::colon() << line ;
 			} else if (i == 23) {
-				ret << "\"vsize\": \"" + line + "\"";
+				ret << "vsize" << Glue::colon() << line ;
 			}
 		}
 		f.close();
@@ -189,13 +190,13 @@ int gpuNumber() {
 	return -3;
 }
 
-std::string nodesJSON(MPI_Comm comm, bool detailed) {
-	Glue nodes(", ", "[ ", " ]");
-	Glue ret(", ", "{ ", " }");
+JSON nodesJSON(MPI_Comm comm, bool detailed) {
+	JSONarray nodes;
+	JSONobject ret;
 	int rank, size;
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
-	ret << (Glue() << "\"size\": " << size).str();
+	ret << "size" << Glue::colon() << size;
 	std::string pname = nodeName(comm);
 	int wrank = rank;
 	int firstrank = 0;
@@ -207,7 +208,7 @@ std::string nodesJSON(MPI_Comm comm, bool detailed) {
 			wrank = size;
 			mynode = i;
 		}
-		std::string nodejson;
+		JSON nodejson;
 		if (rank == firstrank) nodejson = nodeJSON(comm);
 		nodejson = MPI_Bcast(nodejson, firstrank, comm);
 		nodes << nodejson;
@@ -215,33 +216,33 @@ std::string nodesJSON(MPI_Comm comm, bool detailed) {
 		MPI_Allreduce(&wrank, &firstrank, 1, MPI_INT, MPI_MIN, comm );
 		if (firstrank >= size) break;
 	}
-	std::pair< std::string, int > procjson = procJSON(mynode);
+	std::pair< JSON, int > procjson = procJSON(mynode);
 	int core = procjson.second;
 	if (detailed) {
-		Glue ranks(", ", "[ ", " ]");
+		JSONarray ranks;
 		for (int i=0; i<size; i++) {
-			std::string otherproc;
+			JSON otherproc;
 			otherproc = MPI_Bcast(procjson.first, i, comm);
 			ranks << otherproc;
 		}
-		ret << "\"ranks\": " + ranks.str();
+		ret << "ranks" << Glue::colon() <<ranks.str();
 	}
 	int mygpu = gpuNumber();
 	int* perrank = NULL;
 	if (rank == 0) perrank = new int[size];
 	MPI_Gather(&core, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
-	if (rank == 0) ret << "\"rank_to_vcore\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	if (rank == 0) ret << "rank_to_vcore" << Glue::colon() << (JSONarray() << std::make_pair(perrank,size)).str();
 	MPI_Gather(&mynode, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
-	if (rank == 0) ret << "\"rank_to_node\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	if (rank == 0) ret << "rank_to_node" << Glue::colon() << (JSONarray() << std::make_pair(perrank,size)).str();
 	MPI_Gather(&mygpu, 1, MPI_INT, perrank, 1, MPI_INT, 0, comm);
-	if (rank == 0) ret << "\"rank_to_gpu\": " + (Glue(", ", "[ ", " ]") << std::make_pair(perrank,size)).str();
+	if (rank == 0) ret << "rank_to_gpu" << Glue::colon() << (JSONarray() << std::make_pair(perrank,size)).str();
 	if (rank == 0) delete[] perrank;
-	ret << "\"nodes\": " + nodes.str();
+	ret << "nodes" << Glue::colon() <<nodes.str();
 	return ret.str();
 }
 
-std::string reformatJSON(const std::string& info) {
-	std::string info_formated;
+JSON reformatJSON(const JSON& info) {
+	JSON info_formated;
 	int ind = 0;
 	bool in_quote = false;
 	int nl_after = -1;
@@ -303,8 +304,8 @@ std::string reformatJSON(const std::string& info) {
 }
 
 
-std::string stripJSON(const std::string& info) {
-	std::string info_formated;
+JSON stripJSON(const JSON& info) {
+	JSON info_formated;
 	bool in_quote = false;
 	for (size_t i = 0; i < info.size(); i++) {
 		char c = info[i];
@@ -326,42 +327,44 @@ std::string stripJSON(const std::string& info) {
 	return info_formated;
 }
 
-std::string versionJSON(const int& major, const int& minor) {
-	Glue ret(", ", "{ ", " }");
-	ret << (Glue() << "\"major\": " << major).str();
-	ret << (Glue() << "\"minor\": " << minor).str();
+JSON versionJSON(const int& major, const int& minor) {
+//	JSONobject ret;
+//	ret << "major" << Glue::colon() << major;
+//	ret << "minor" << Glue::colon() << minor;
+	JSONarray ret;
+	ret <<  major << minor;
 	return ret.str();
 }
 
-std::string libJSON(const std::string& name, const int& major, const int& minor) {
-	Glue ret(", ", "{ ", " }");
-	ret << "\"name\": \"" + name + "\"";
-	ret << "\"version\": " + versionJSON(major, minor);
+JSON libJSON(const std::string& name, const int& major, const int& minor) {
+	JSONobject ret;
+	ret << "name" << Glue::colon() << name ;
+	ret << "version" << Glue::colon() << versionJSON(major, minor);
 	return ret.str();
 }
 
-std::string CUDAlibJSON(const int& version) {
+JSON CUDAlibJSON(const int& version) {
 	int major = version/1000;
 	int minor = (version - major*1000)/10;
 	const std::string name = "CUDA";
-	Glue ret(", ", "{ ", " }");
-	ret << "\"name\": \"" + name + "\"";
-	ret << "\"version\": " + versionJSON(major, minor);
+	JSONobject ret;
+	ret << "name" << Glue::colon() << name ;
+	ret << "version" << Glue::colon() <<versionJSON(major, minor);
 	return ret.str();
 }
 
-std::string compilationJSON() {
-	Glue ret(", ", "{ ", " }");
-	std::string val;
+JSON compilationJSON() {
+	JSONobject ret;
+	JSON val;
 
 	val = "null";
 #ifdef __linux__
-	val = "\"linux\"";
+	val = Glue::alwaysquote("linux");
 #endif
 #ifdef _WIN32
-	val = "\"windows\"";
+	val = Glue::alwaysquote("windows");
 #endif
-	ret << "\"os\": " + val;
+	ret << "os" << Glue::colon() <<val;
 
 	val = "null";
 #ifdef __GNUC__
@@ -379,35 +382,35 @@ std::string compilationJSON() {
 #ifdef __MINGW64__
 	val = libJSON("MinWG64",__MINGW64_MAJOR_VERSION,__MINGW64_MINOR_VERSION);
 #endif
-	ret << "\"compiler\": " + val;
+	ret << "compiler" << Glue::colon() << val;
 
 	val = "null";
 #ifdef __GLIBC__
 	val = libJSON("glibc",__GLIBC__,__GLIBC_MINOR__);
 #endif
-	ret << "\"glibc\": " + val;
+	ret << "glibc" << Glue::colon() <<val;
 
 	val = "null";
 #ifdef CROSS_GPU
 	val = CUDAlibJSON(CUDART_VERSION);
 #endif
-	ret << "\"cuda\": " + val;
+	ret << "cuda" << Glue::colon() <<val;
 
 	return ret.str();
 }
 
-std::string runtimeJSON() {
-	Glue ret(", ", "{ ", " }");
-	std::string val,name;
+JSON runtimeJSON() {
+	JSONobject ret;
+	JSON val;
+	std::string name;
 	int major, minor;
-	Glue fragment(", ", "{ ", " }");
+	JSONobject fragment;
 
 	val = "null";
 #ifdef __GLIBC__
-	val = gnu_get_libc_version();
-	val = "\"" + val + "\"";
+	val = Glue::alwaysquote(gnu_get_libc_version());
 #endif
-	ret << "\"glibc\": " + val;
+	ret << "glibc" << Glue::colon() << val;
 
 	val = "null";
 #ifdef CROSS_GPU
@@ -417,7 +420,7 @@ std::string runtimeJSON() {
 		val = CUDAlibJSON(ver);
 	}
 #endif
-	ret << "\"cuda_runtime\": " + val;
+	ret << "cuda_runtime" << Glue::colon() <<val;
 	val = "null";
 #ifdef CROSS_GPU
 	{
@@ -426,7 +429,7 @@ std::string runtimeJSON() {
 		val = CUDAlibJSON(ver);
 	}
 #endif
-	ret << "\"cuda_driver\": " + val;
+	ret << "cuda_driver" << Glue::colon() <<val;
 
 	return ret.str();
 }

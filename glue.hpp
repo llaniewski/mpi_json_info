@@ -7,20 +7,30 @@
 #include <iomanip>
 
 class Glue {
+public:
+    class alwaysquote : public std::string {
+        public:
+            alwaysquote(const std::string& str_=""): std::string(str_) {}
+    };
+    class  neverquote : public std::string {
+        public:
+            neverquote(const std::string& str_=""): std::string(str_) {}
+            neverquote(const char str_[]): std::string(str_) {}
+            neverquote(const alwaysquote& str_): std::string(std::string("\"") + std::string(str_) + std::string("\"")) {}
+    };
+    class  separator : public std::string { public:  separator(const std::string& str_=""): std::string(str_) {} };
 private:
     std::stringstream s;
     std::string sep;
-    std::string val;
+    neverquote val;
     std::string begin;
     std::string end;
     bool empty;
+    bool quote;
 public:
-    inline Glue() {
-        s << std::setprecision(14);
-        s << std::scientific;
-        empty = true;
-    }
-    inline Glue(std::string sep_, std::string begin_="", std::string end_="") : sep(sep_), begin(begin_), end(end_) {
+    static inline const separator colon() { return separator(": "); }
+        
+    inline Glue(std::string sep_="", std::string begin_="", std::string end_="", bool quote_=false) : sep(sep_), begin(begin_), end(end_), quote(quote_) {
         s << std::setprecision(14);
         s << std::scientific;
         empty = true;
@@ -36,11 +46,11 @@ public:
         empty = true;
         return *this;
     }
-    template <class T> inline Glue& operator<< (const std::pair<T*, int>& t) {
-        for (int i=0; i<t.second; i++) (*this) << t.first[i];
+    template <class T> inline Glue& glue(const T& t) {
+        s << t;
         return *this;
     }
-    template <class T> inline Glue& operator<< (const T& t) {
+    template <class T> inline Glue& add(const T& t) {
         if (sep == "" || empty)
             s << t;
         else
@@ -48,7 +58,37 @@ public:
         empty = false;
         return *this;
     }
-    inline const std::string& str () {
+    template <class T> inline Glue& operator<< (const T& t) {
+        return this->add(t);
+    }
+    inline Glue& operator<< (const std::string& t) {
+        if (quote) {
+            return this->add("\"" + t + "\"");
+        } else {
+            return this->add(t);
+        }        
+    }
+    inline Glue& operator<< (const separator& t) {
+        empty=true;
+        return this->glue(t);
+    }
+    inline Glue& operator<< (const char t[]) {
+        return (*this) << std::string(t);
+    }
+    inline Glue& operator<< (const neverquote& t) {
+        return this->add(t);
+    }
+    inline Glue& operator<< (const alwaysquote& t) {
+        return this->add("\"" + t + "\"");
+    }
+    inline Glue& operator<< (Glue& t) {
+        return this->add(t.str());
+    }
+    template <class T> inline Glue& operator<< (const std::pair<T*, int>& t) {
+        for (int i=0; i<t.second; i++) (*this) << t.first[i];
+        return *this;
+    }
+    inline const neverquote& str (){
         val = begin + s.str() + end;
         return val;
     }
@@ -59,5 +99,10 @@ public:
         return this->str().c_str();
     }
 };
+
+class JSONobject : public Glue { public: JSONobject() : Glue(", ","{ "," }", true) {} };
+class JSONarray  : public Glue { public: JSONarray() : Glue(", ","[ "," ]", true) {} };
+typedef Glue::neverquote JSON;
+
 
 #endif

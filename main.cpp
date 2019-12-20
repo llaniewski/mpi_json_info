@@ -1,8 +1,10 @@
+#define OMPI_SKIP_MPICXX
 #include <stdio.h>
 #include <mpi.h>
 #include "mpi_json_info.h"
 
 #include "glue.hpp"
+
 
 int main ( int argc, char * argv[] )
 {
@@ -21,5 +23,6 @@ int main ( int argc, char * argv[] )
 	if (rank == 0) {
 		printf("%s\n", reformatJSON(info).c_str());
 	}
+	
 	MPI_Finalize();
 }
