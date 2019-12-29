@@ -52,13 +52,13 @@ JSON gpuJSON() {
 			}
 			gpus << gpu.str();
 		}
-		ret << "gpus:" << Glue::colon() << ngpus;
-		ret << "gpu:"  << Glue::colon() << gpus.str();
+		ret << "gpus" << Glue::colon() << ngpus;
+		ret << "gpu"  << Glue::colon() << gpus.str();
 	}
 #else
 	ret << "gpus" << Glue::colon() << 0;
 	ret << "gpu" << Glue::colon() << JSONarray().str();
-	ret << "warning:" << Glue::colon() << "compiled without CUDA";
+	ret << "warning" << Glue::colon() << "compiled without CUDA";
 #endif
 	return ret.str();
 }
