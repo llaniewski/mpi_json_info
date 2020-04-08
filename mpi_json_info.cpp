@@ -245,6 +245,7 @@ JSON reformatJSON(const JSON& info) {
 	JSON info_formated;
 	int ind = 0;
 	bool in_quote = false;
+	bool in_escape = false;
 	int nl_after = -1;
 	int nl_before = -1;
 	bool space_after = false;
@@ -252,7 +253,13 @@ JSON reformatJSON(const JSON& info) {
 	for (size_t i = 0; i < info.size(); i++) {
 		char c = info[i];
 		if (in_quote) {
-			if (c == '"') in_quote = false;
+			if (in_escape) {
+				in_escape = false;
+			} else if (c == '\\') {
+				in_escape = true;
+			} else if (c == '"') {
+				in_quote = false;
+			}
 		} else if (c == '"') {
 			in_quote = true;
 		} else if (c == ' ') {
@@ -307,10 +314,17 @@ JSON reformatJSON(const JSON& info) {
 JSON stripJSON(const JSON& info) {
 	JSON info_formated;
 	bool in_quote = false;
+	bool in_escape = false;
 	for (size_t i = 0; i < info.size(); i++) {
 		char c = info[i];
 		if (in_quote) {
-			if (c == '"') in_quote = false;
+			if (in_escape) {
+				in_escape = false;
+			} else if (c == '\\') {
+				in_escape = true;
+			} else if (c == '"') {
+				in_quote = false;
+			}
 		} else if (c == '"') {
 			in_quote = true;
 		} else if (c == ' ') {
@@ -433,3 +447,27 @@ JSON runtimeJSON() {
 
 	return ret.str();
 }
+
+#include <pwd.h>
+#include <unistd.h>
+#include <sys/types.h>
+
+JSON localJSON() {
+	struct passwd *pw;
+	register uid_t uid;
+	JSONobject ret;
+	uid = geteuid ();
+	ret << "UID" << Glue::colon() << uid;
+	pw = getpwuid (uid);
+	if (pw) {
+		JSONobject user;
+		user << "name" << Glue::colon() << std::string(pw->pw_name);
+		user << "fullname" << Glue::colon() << std::string(pw->pw_gecos);
+		user << "home" << Glue::colon() << std::string(pw->pw_dir);
+		ret << "user" << Glue::colon() << user.str();
+	} else {
+		ret << "user" << Glue::colon() << std::string("UID not found");
+	}
+	return ret.str();
+}
+	

@@ -16,5 +16,6 @@ JSON stripJSON(const JSON& info);
 JSON versionJSON(const int& major, const int& minor);
 JSON compilationJSON();
 JSON runtimeJSON();
+JSON localJSON();
 
 #endif

@@ -16,9 +16,30 @@ public:
         public:
             neverquote(const std::string& str_=""): std::string(str_) {}
             neverquote(const char str_[]): std::string(str_) {}
-            neverquote(const alwaysquote& str_): std::string(std::string("\"") + std::string(str_) + std::string("\"")) {}
+            neverquote(const alwaysquote& str_): std::string(quote(str_)) {}
     };
     class  separator : public std::string { public:  separator(const std::string& str_=""): std::string(str_) {} };
+    static neverquote quote(std::string str) {
+        std::string ret;
+        ret.push_back('"');
+	for (size_t i = 0; i < str.size(); i++) {
+		char c = str[i];
+		if (c == '"') {
+                    ret.push_back('\\');
+                    ret.push_back('"');
+                } else if (c == '\n') {
+                    ret.push_back('\\');
+                    ret.push_back('n');
+                } else if (c == '\t') {
+                    ret.push_back('\\');
+                    ret.push_back('t');
+                } else {
+                    ret.push_back(c);
+                }
+        }
+        ret.push_back('"');		
+        return ret;
+    }
 private:
     std::stringstream s;
     std::string sep;
@@ -26,11 +47,11 @@ private:
     std::string begin;
     std::string end;
     bool empty;
-    bool quote;
+    bool use_quote;
 public:
-    static inline const separator colon() { return separator(": "); }
+    static inline const separator colon() { return separator(":"); }
         
-    inline Glue(std::string sep_="", std::string begin_="", std::string end_="", bool quote_=false) : sep(sep_), begin(begin_), end(end_), quote(quote_) {
+    inline Glue(std::string sep_="", std::string begin_="", std::string end_="", bool use_quote_=false) : sep(sep_), begin(begin_), end(end_), use_quote(use_quote_) {
         s << std::setprecision(14);
         s << std::scientific;
         empty = true;
@@ -62,8 +83,8 @@ public:
         return this->add(t);
     }
     inline Glue& operator<< (const std::string& t) {
-        if (quote) {
-            return this->add("\"" + t + "\"");
+        if (use_quote) {
+            return this->add(quote(t));
         } else {
             return this->add(t);
         }        
@@ -79,7 +100,7 @@ public:
         return this->add(t);
     }
     inline Glue& operator<< (const alwaysquote& t) {
-        return this->add("\"" + t + "\"");
+        return this->add(quote(t));
     }
     inline Glue& operator<< (Glue& t) {
         return this->add(t.str());
@@ -100,8 +121,8 @@ public:
     }
 };
 
-class JSONobject : public Glue { public: JSONobject() : Glue(", ","{ "," }", true) {} };
-class JSONarray  : public Glue { public: JSONarray() : Glue(", ","[ "," ]", true) {} };
+class JSONobject : public Glue { public: JSONobject() : Glue(",","{","}", true) {} };
+class JSONarray  : public Glue { public: JSONarray() : Glue(",","[","]", true) {} };
 typedef Glue::neverquote JSON;
 
 
