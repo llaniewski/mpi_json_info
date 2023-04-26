@@ -2,6 +2,7 @@
 #define GLUE_H
 
 #include <string>
+#include <vector>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
@@ -47,36 +48,37 @@ private:
     std::string begin;
     std::string end;
     bool empty;
+    bool omit_sep;
     bool use_quote;
 public:
     static inline const separator colon() { return separator(":"); }
+    static inline const separator dash() { return separator("-"); }
+    static inline const separator no_sep() { return separator(""); }
         
     inline Glue(std::string sep_="", std::string begin_="", std::string end_="", bool use_quote_=false) : sep(sep_), begin(begin_), end(end_), use_quote(use_quote_) {
         s << std::setprecision(14);
         s << std::scientific;
         empty = true;
-    }
-    inline Glue& operator () (std::string sep_ = "") {
-        s.str(std::string());
-        sep = sep_;
-        empty = true;
-        return *this;
+        omit_sep = true;
     }
     inline Glue& clear() {
         s.str(std::string());
         empty = true;
+        omit_sep = true;
         return *this;
     }
     template <class T> inline Glue& glue(const T& t) {
+        empty = false;
         s << t;
         return *this;
     }
     template <class T> inline Glue& add(const T& t) {
-        if (sep == "" || empty)
+        empty = false;
+        if (sep == "" || omit_sep)
             s << t;
         else
             s << sep << t;
-        empty = false;
+        omit_sep = false;
         return *this;
     }
     template <class T> inline Glue& operator<< (const T& t) {
@@ -90,7 +92,8 @@ public:
         }        
     }
     inline Glue& operator<< (const separator& t) {
-        empty=true;
+        omit_sep = true;
+        empty = true;
         return this->glue(t);
     }
     inline Glue& operator<< (const char t[]) {
@@ -109,6 +112,10 @@ public:
         for (int i=0; i<t.second; i++) (*this) << t.first[i];
         return *this;
     }
+    template <class T> inline Glue& operator<< (const std::vector<T>& t) {
+        for (int i=0; i<t.size(); i++) this->add(t[i]);
+        return *this;
+    }
     inline const neverquote& str (){
         val = begin + s.str() + end;
         return val;
@@ -119,11 +126,9 @@ public:
     inline operator const char* () {
         return this->str().c_str();
     }
+    inline bool is_empty() {
+        return empty;
+    }
 };
 
-class JSONobject : public Glue { public: JSONobject() : Glue(",","{","}", true) {} };
-class JSONarray  : public Glue { public: JSONarray() : Glue(",","[","]", true) {} };
-typedef Glue::neverquote JSON;
-
-
-#endif
+#endif //GLUE_H

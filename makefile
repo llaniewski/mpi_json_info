@@ -1,18 +1,23 @@
 CC=g++
 
-CPPFLAGS = -I/usr/local/cuda/include -I/usr/include/mpi -O3 -Wno-write-strings
-LDFLAGS = -L/usr/local/cuda/lib64 -L/usr/lib/openmpi/lib -lmpi -lm -L/net/software/local/cuda/9.0/lib64/
+CPPFLAGS  = -O3 -Wno-write-strings -std=c++03
+CPPFLAGS += -I/usr/lib/x86_64-linux-gnu/openmpi/include -I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -L/usr/lib/x86_64-linux-gnu/openmpi/lib
+CPPFLAGS += -I/usr/local/cuda-11.8/include
+LDFLAGS   = -L/usr/lib/openmpi/lib -lmpi -lmpi_cxx -lm -lpthread
+LDFLAGS  += -L/usr/local/cuda-11.8/lib64
+LDFLAGS  += -lcudart
+CPPFLAGS += -DCROSS_GPU
+LDFLAGS  += -lcurl
 
 all : main
-gpu : main
-gpu : LDFLAGS += -lcudart
-gpu : CPPFLAGS += -DCROSS_GPU
 
-main : main.o mpi_json_info.o
+main : main.o mpi_json_info.o pugixml.o json_to_xml.o json.o curlCall.o faunadb.o
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-main.o : main.cpp mpi_json_info.h glue.hpp
-	$(CC) $(CPPFLAGS) -c -o $@ $<
+json.hpp : glue.hpp
+json.cpp : json.hpp
+main.cpp : mpi_json_info.h glue.hpp
+mpi_json_info.cpp : mpi_json_info.h json.hpp
 
-mpi_json_info.o : mpi_json_info.cpp mpi_json_info.h glue.hpp
+%.o : %.cpp
 	$(CC) $(CPPFLAGS) -c -o $@ $<
