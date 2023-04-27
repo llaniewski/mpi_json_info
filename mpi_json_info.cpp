@@ -10,6 +10,7 @@
 #ifdef CROSS_GPU
 	#include <cuda.h>
 	#include <cuda_runtime.h>
+	#include <nvml.h>
 #endif
 #ifdef __GLIBC__
 	#include <gnu/libc-version.h>
@@ -24,10 +25,10 @@ std::string nodeName(MPI_Comm comm) {
 
 JSON gpuJSON() {
 	JSONobject ret;
+	JSONarray gpus;
 #ifdef CROSS_GPU
 	cudaError_t status;
 	int ngpus;
-	JSONarray gpus;
 	status = cudaGetDeviceCount(&ngpus);
 	if (status == cudaErrorNoDevice) {
 		ngpus = 0;
@@ -324,15 +325,25 @@ JSON compilationJSON() {
 #ifdef __GLIBC__
 	val = libJSON("glibc",__GLIBC__,__GLIBC_MINOR__);
 #endif
-	ret << "glibc" << Glue::colon() <<val;
+	ret << "libc" << Glue::colon() <<val;
 
 	val = "null";
 #ifdef CROSS_GPU
 	val = CUDAlibJSON(CUDART_VERSION);
 #endif
-	ret << "cuda" << Glue::colon() << val;
+	ret << "dev_toolkit" << Glue::colon() << val;
 
-	ret << "cxx" << Glue::colon() << CPPversionJSON(__cplusplus);
+	val = "null";
+#ifdef MPI_VERSION
+	val = libJSON("MPI",MPI_VERSION,MPI_SUBVERSION);
+#endif 
+	ret << "MPI" << Glue::colon() << val;
+
+	val = "null";
+#ifdef __cplusplus
+	val = CPPversionJSON(__cplusplus);
+#endif
+	ret << "cxx" << Glue::colon() << val;
 	return ret.str();
 }
 
@@ -345,9 +356,15 @@ JSON runtimeJSON() {
 
 	val = "null";
 #ifdef __GLIBC__
-	val = Glue::alwaysquote(gnu_get_libc_version());
+	{
+		JSONobject tmp;
+		tmp << "name" << Glue::colon() << "glibc";
+		tmp << "version" << Glue::colon() << Glue::alwaysquote(gnu_get_libc_version());
+		tmp << "release" << Glue::colon() << Glue::alwaysquote(gnu_get_libc_release());
+		val = tmp.str();
+	}
 #endif
-	ret << "glibc" << Glue::colon() << val;
+	ret << "libc" << Glue::colon() << val;
 
 	val = "null";
 #ifdef CROSS_GPU
@@ -357,7 +374,7 @@ JSON runtimeJSON() {
 		val = CUDAlibJSON(ver);
 	}
 #endif
-	ret << "cuda_runtime" << Glue::colon() <<val;
+	ret << "dev_runtime" << Glue::colon() <<val;
 	val = "null";
 #ifdef CROSS_GPU
 	{
@@ -366,9 +383,24 @@ JSON runtimeJSON() {
 		val = CUDAlibJSON(ver);
 	}
 #endif
-	ret << "cuda_driver" << Glue::colon() <<val;
+	ret << "dev_driver" << Glue::colon() <<val;
 
 	ret << "MPI" << Glue::colon() << MPIruntimeJSON();
+
+#ifdef CROSS_GPU
+	{
+		char version_str[NVML_DEVICE_PART_NUMBER_BUFFER_SIZE+1];
+		version_str[0] = '\0';
+		nvmlInit_v2();
+		nvmlReturn_t retval = nvmlSystemGetDriverVersion(version_str, NVML_DEVICE_PART_NUMBER_BUFFER_SIZE);
+		if (retval != NVML_SUCCESS) {
+    		fprintf(stderr, "%s\n",nvmlErrorString(retval));
+    		exit(-1);
+		}
+		nvmlShutdown();
+		ret << "driver" << Glue::colon() << Glue::neverquote(version_str);
+	}
+#endif
 
 	return ret.str();
 }

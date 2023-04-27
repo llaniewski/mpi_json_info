@@ -5,7 +5,7 @@ CPPFLAGS += -I/usr/lib/x86_64-linux-gnu/openmpi/include -I/usr/lib/x86_64-linux-
 CPPFLAGS += -I/usr/local/cuda-11.8/include
 LDFLAGS   = -L/usr/lib/openmpi/lib -lmpi -lmpi_cxx -lm -lpthread
 LDFLAGS  += -L/usr/local/cuda-11.8/lib64
-LDFLAGS  += -lcudart
+LDFLAGS  += -lcudart -lnvidia-ml
 CPPFLAGS += -DCROSS_GPU
 LDFLAGS  += -lcurl
 

@@ -25,7 +25,7 @@ int main (int argc, char *argv[]) {
             JSONobject infoglue;
             infoglue << "MPI"  << Glue::colon() << nodesJSON(comm, true);
             JSON localinfo = localJSON();
-            infoglue << "local"  << Glue::colon() << localinfo;
+            infoglue << "user"  << Glue::colon() << localinfo;
             JSON geoinfo = curlAPICall("https://ipapi.co/json/");
             infoglue << "IP"  << Glue::colon() << geoinfo;
             infoglue << "compile"  << Glue::colon() << compilationJSON();
