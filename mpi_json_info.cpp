@@ -6,6 +6,8 @@
 #include <vector>
 #include <fstream>
 #include <cerrno>
+#include <pwd.h>
+#include <sys/types.h>
 #include "glue.hpp"
 #ifdef CROSS_GPU
 	#include <cuda.h>
@@ -347,6 +349,36 @@ JSON compilationJSON() {
 	return ret.str();
 }
 
+
+JSON LSBreleaseJSON() {
+	JSONobject ret;
+	std::ifstream f("/etc/os-release");
+	if (f.fail()) {
+		std::string err = strerror(errno);
+		ret << "error" << Glue::colon() << std::string("/etc/os-release: ") + std::string(err);
+	} else {
+		std::string line;
+		while (std::getline(f, line)) {
+			size_t i = line.find('=');
+			if (i != std::string::npos) {
+				std::string name = line.substr(0,i);
+				JSON val;
+				if (line[i+1] == '\"') {
+					val = Glue::neverquote(line.substr(i+1,line.size()));
+				} else {
+					val = Glue::alwaysquote(line.substr(i+1,line.size()));
+				}
+				if (name.find("URL") == std::string::npos) {
+					ret << name << Glue::colon() << val;
+				}
+			}
+		}
+		f.close();
+	}
+	return ret.str();
+}
+
+
 JSON runtimeJSON() {
 	JSONobject ret;
 	JSON val;
@@ -402,12 +434,10 @@ JSON runtimeJSON() {
 	}
 #endif
 
+	ret << "lsb_release" << Glue::colon() << LSBreleaseJSON();
+
 	return ret.str();
 }
-
-#include <pwd.h>
-#include <unistd.h>
-#include <sys/types.h>
 
 JSON localJSON() {
 	struct passwd *pw;
