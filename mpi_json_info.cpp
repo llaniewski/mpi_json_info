@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <vector>
 #include <fstream>
 #include <cerrno>
@@ -168,35 +169,11 @@ JSON getCoreBind() {
 
 
 std::pair< JSON, int > procJSON(int node) {
-	int core = -1;
+	int core = sched_getcpu();
 	JSONobject ret;
+	ret << "pid"  << Glue::colon() << getpid();
 	ret << "node" << Glue::colon() << node;
-	std::ifstream f("/proc/self/stat");
-	if (f.fail()) {
-		std::string err = strerror(errno);
-		ret << "error" << Glue::colon() << std::string("/proc/self/stat: ") + std::string(err) ;
-	} else {
-		std::string line;
-		int i = 0;
-		while (std::getline(f, line, ' ')) {
-			i++;
-			if (i == 39) {
-				core = atoi(line.c_str());
-				ret << "vcore" << Glue::colon() <<line;
-			} else if (i == 1) {
-				ret << "pid" << Glue::colon() <<line;
-			} else if (i == 14) {
-				ret << "utime" << Glue::colon() << line ;
-			} else if (i == 15) {
-				ret << "stime" << Glue::colon() << line ;
-			} else if (i == 22) {
-				ret << "starttime" << Glue::colon() << line ;
-			} else if (i == 23) {
-				ret << "vsize" << Glue::colon() << line ;
-			}
-		}
-		f.close();
-	}
+	ret << "vcore"  << Glue::colon() << core;
 	ret << "bind" << Glue::colon() << getCoreBind();
 	return std::make_pair( ret.str(), core );
 }
@@ -212,17 +189,16 @@ int gpuNumber() {
 	return -3;
 }
 
-JSON MPIversionJSON() {
+JSON MPIruntimeJSON() {
+	JSONobject ret;
 	int major, minor;
-	MPI_Get_version(&major, &minor);
-	return versionJSON(major, minor);
-}
-
-JSON MPIlibJSON() {
 	char str[MPI_MAX_LIBRARY_VERSION_STRING];
 	int size;
 	MPI_Get_library_version(str, &size);
-	return Glue::alwaysquote(std::string(str));
+	ret << "name" << Glue::colon() << Glue::alwaysquote(str);
+	MPI_Get_version(&major, &minor);
+	ret << "version" << Glue::colon() << versionJSON(major, minor);
+	return ret.str();
 }
 
 JSON nodesJSON(MPI_Comm comm, bool detailed) {
@@ -232,8 +208,6 @@ JSON nodesJSON(MPI_Comm comm, bool detailed) {
 	MPI_Comm_rank(comm, &rank);
 	MPI_Comm_size(comm, &size);
 	ret << "size" << Glue::colon() << size;
-	ret << "version" << Glue::colon() << MPIversionJSON();
-	ret << "library" << Glue::colon() << MPIlibJSON();
 	std::string pname = nodeName(comm);
 	int wrank = rank;
 	int firstrank = 0;
@@ -394,6 +368,8 @@ JSON runtimeJSON() {
 #endif
 	ret << "cuda_driver" << Glue::colon() <<val;
 
+	ret << "MPI" << Glue::colon() << MPIruntimeJSON();
+
 	return ret.str();
 }
 
@@ -404,19 +380,16 @@ JSON runtimeJSON() {
 JSON localJSON() {
 	struct passwd *pw;
 	register uid_t uid;
-	JSONobject ret;
+	JSONobject user;
 	uid = geteuid ();
-	ret << "UID" << Glue::colon() << uid;
 	pw = getpwuid (uid);
 	if (pw) {
-		JSONobject user;
 		user << "name" << Glue::colon() << std::string(pw->pw_name);
 		user << "fullname" << Glue::colon() << std::string(pw->pw_gecos);
 		user << "home" << Glue::colon() << std::string(pw->pw_dir);
-		ret << "user" << Glue::colon() << user.str();
 	} else {
-		ret << "user" << Glue::colon() << std::string("UID not found");
+		user << "error" << Glue::colon() << std::string("UID not found");
 	}
-	return ret.str();
+	return user.str();
 }
 	
