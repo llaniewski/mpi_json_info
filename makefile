@@ -15,9 +15,9 @@ main : main.o mpi_json_info.o pugixml.o json_to_xml.o json.o curlCall.o faunadb.
 	$(CC) -o $@ $^ $(LDFLAGS)
 
 json.hpp : glue.hpp
-json.cpp : json.hpp
+json.o : json.cpp json.hpp
 main.cpp : mpi_json_info.h glue.hpp
-mpi_json_info.cpp : mpi_json_info.h json.hpp
+mpi_json_info.o : mpi_json_info.cpp mpi_json_info.h json.hpp glue.hpp
 
 %.o : %.cpp
 	$(CC) $(CPPFLAGS) -c -o $@ $<

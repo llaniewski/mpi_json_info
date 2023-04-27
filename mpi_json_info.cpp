@@ -66,8 +66,8 @@ JSON gpuJSON() {
 
 JSON cpuJSON() {
 	JSONobject ret;
-	JSONarray physicalid;
-	JSONarray coreid;
+	compress_rep physicalid;
+	compress_rep coreid;
 	JSONarray cpus;
 	int ncores=0;
 	int ncpu=0;
@@ -84,8 +84,8 @@ JSON cpuJSON() {
 		while (std::getline(f, line)) {
 			if (line == "") {
 				ncores++;
-				physicalid << cpuname;
-				coreid << corename;
+				physicalid << atoi(cpuname.c_str());
+				coreid << atoi(corename.c_str());
 				int k = atoi(cpuname.c_str());
 				if (k > cpunumber) {
 					ncpu++;
@@ -147,28 +147,21 @@ std::string MPI_Bcast(const std::string& str, int root, MPI_Comm comm) {
 	return ret;
 }
 
+template<class T>
+void MPI_Bcast(std::vector<T>& vec, MPI_Datatype typ, int root, MPI_Comm comm) {
+	size_t size = vec.size();
+	MPI_Bcast(&size, 1, MPI_UNSIGNED_LONG, root, comm);
+	vec.resize(size);
+	MPI_Bcast(&vec[0], size, typ, root, comm);
+}
+
 
 JSON getCoreBind() {
 	cpu_set_t mask;
 	sched_getaffinity(0, sizeof(cpu_set_t), &mask);
-	Glue ret(",","\"","\"");
-	int first = -1, last = -1;
+	compress_rep ret;
     for (int i=0; i<CPU_SETSIZE; i++) {
-		bool isset = CPU_ISSET(i, &mask);
-		if (isset) {
-			if (first < 0) first = i;
-			last = i;
-		}
-		if (i == CPU_SETSIZE - 1 || !isset) {
-			if (first >= 0) {
-				if (first == last) {
-					ret << first;
-				} else {
-					ret << first << Glue::dash() << last;
-				}
-				first = -1;
-			}
-		}
+		if (CPU_ISSET(i, &mask)) ret << i;
 	}
 	return ret.str();
 }
@@ -337,7 +330,7 @@ JSON compilationJSON() {
 
 	val = "null";
 #ifdef __GNUC__
-	val = libJSON("gcc",__GNUC__,__GNUC_MINOR__);
+	val = libJSON("gnu",__GNUC__,__GNUC_MINOR__);
 #endif
 #ifdef __clang__
 	val = libJSON("clang",__clang_major__,__clang_minor__);

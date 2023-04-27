@@ -11,8 +11,6 @@ bool JSONtoXML::str(std::string& val) {
             in_escape = false;
         } else if (now() == '\\') {
             in_escape = true;
-            i++;
-            continue;
         } else if (now() == '"') {
             return expect('"');
         }

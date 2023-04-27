@@ -131,4 +131,48 @@ public:
     }
 };
 
+class compress_rep {
+    Glue ret;
+    int last, first, type, num;
+    public: 
+        compress_rep(): ret(",") { type = 0; num = 0; };
+        inline void finish() {
+            switch (type) {
+                case 0: break;
+                case 1: ret << last; break;
+                case 2: ret << first << Glue::separator("-") << last; break;
+                case 3: ret << last << Glue::separator("x") << num; break;
+            }
+            type = 0; num = 0;
+        }
+        inline compress_rep& add(const int& v) {
+            switch (type) {
+                case 1: if (v == last+1) { type = 2; } else
+                        if (v == last)   { type = 3; } else
+                        finish();
+                        break;
+                case 2: if (v != last+1) finish(); break;
+                case 3: if (v != last) finish(); break;
+            }
+            if (type == 0) {
+                first = v; type = 1;
+            }
+            last = v;
+            num++;
+            return *this;
+        }
+        template <class T> inline compress_rep& operator<< (const T& t) {
+            return this->add(t);
+        }
+        template <class T> inline compress_rep& operator<< (const std::vector<T>& t) {
+            for (int i=0; i<t.size(); i++) this->add(t[i]);
+            return *this;
+        }
+        inline Glue::alwaysquote str() {
+            finish();
+            return ret.str();
+        }
+};
+
+
 #endif //GLUE_H
