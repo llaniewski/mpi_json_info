@@ -12,11 +12,33 @@
 #ifdef CROSS_GPU
 	#include <cuda.h>
 	#include <cuda_runtime.h>
-	#include <nvml.h>
+	#ifdef HAS_NVML
+		#include <nvml.h>
+	#endif
+#endif
+#ifdef CROSS_HIP
+	#include <hip/hip_runtime.h>
 #endif
 #ifdef __GLIBC__
 	#include <gnu/libc-version.h>
 #endif
+
+extern char **environ;
+
+JSON envJSON() {
+  JSONobject ret;
+  char **s = environ;
+  for (; *s != NULL; s++) {
+    std::string env(*s);
+    if (env.substr(0,3) == "ROC") {
+      size_t i = env.find_first_of('=');
+      std::string name = env.substr(0,i);
+      Glue::alwaysquote val = env.substr(i+1);
+      ret << name << Glue::colon() << val;
+    }
+  }
+  return ret.str();
+}
 
 std::string nodeName(MPI_Comm comm) {
 	int cpname_len;
@@ -28,7 +50,7 @@ std::string nodeName(MPI_Comm comm) {
 JSON gpuJSON() {
 	JSONobject ret;
 	JSONarray gpus;
-#ifdef CROSS_GPU
+#if defined(CROSS_GPU)
 	cudaError_t status;
 	int ngpus;
 	status = cudaGetDeviceCount(&ngpus);
@@ -60,7 +82,49 @@ JSON gpuJSON() {
 		ret << "gpus" << Glue::colon() << ngpus;
 		ret << "gpu"  << Glue::colon() << gpus.str();
 	}
+#elif defined(CROSS_HIP)
+	hipError_t status;
+	int ngpus;
+	status = hipGetDeviceCount(&ngpus);
+	if (status == hipErrorNoDevice) {
+		ngpus = 0;
+		status = hipSuccess;
+	}
+	if (status != hipSuccess) {
+		ret << "error" << Glue::colon() << std::string("hipGetDeviceCount: ") + std::string(hipGetErrorString(status));
+	} else {
+		for (int i=0; i<ngpus; i++) {
+			JSONobject gpu;
+			hipDeviceProp_t prop;
+			status = hipGetDeviceProperties(&prop, i);
+			if (status != hipSuccess) {
+				gpu << "error" << Glue::colon() << std::string("hipGetDeviceProperties: ") + std::string(hipGetErrorString(status));
+			} else {
+				gpu << "name" << Glue::colon() << std::string(prop.name);
+				gpu << "totalGlobalMem" << Glue::colon() << prop.totalGlobalMem;
+				gpu << "sharedMemPerBlock" << Glue::colon() << prop.sharedMemPerBlock;
+				gpu << "version" << Glue::colon() << versionJSON(prop.major,prop.minor);
+				gpu << "clockRate" << Glue::colon() << prop.clockRate;
+				gpu << "multiProcessorCount" << Glue::colon() << prop.multiProcessorCount;
+				// gpu << "ECCEnabled" << Glue::colon() << Glue::neverquote(prop.ECCEnabled ? "true" : "false");
+				gpu << "ECCEnabled" << Glue::colon() << (bool) prop.ECCEnabled;
+			}
+			const size_t STRSIZE = 1024;
+			char busid[STRSIZE];
+			status = hipDeviceGetPCIBusId(busid, STRSIZE, i);
+			if (status != hipSuccess) {
+				gpu << "error" << Glue::colon() << std::string("hipDeviceGetPCIBusId: ") + std::string(hipGetErrorString(status));
+			} else {
+				gpu << "PCIBusId" << Glue::colon() << std::string(busid);
+			}
+
+			gpus << gpu.str();
+		}
+		ret << "gpus" << Glue::colon() << ngpus;
+		ret << "gpu"  << Glue::colon() << gpus.str();
+	}
 #else
+
 	ret << "gpus" << Glue::colon() << 0;
 	ret << "gpu" << Glue::colon() << JSONarray().str();
 	ret << "warning" << Glue::colon() << "compiled without CUDA";
@@ -303,7 +367,7 @@ JSON compilationJSON() {
 #ifdef _WIN32
 	val = Glue::alwaysquote("windows");
 #endif
-	ret << "os" << Glue::colon() <<val;
+	ret << "os" << Glue::colon() << val;
 
 	val = "null";
 #ifdef __GNUC__
@@ -420,6 +484,8 @@ JSON runtimeJSON() {
 	ret << "MPI" << Glue::colon() << MPIruntimeJSON();
 
 #ifdef CROSS_GPU
+#ifdef HAS_NVML
+
 	{
 		char version_str[NVML_DEVICE_PART_NUMBER_BUFFER_SIZE+1];
 		version_str[0] = '\0';
@@ -433,8 +499,11 @@ JSON runtimeJSON() {
 		ret << "driver" << Glue::colon() << Glue::neverquote(version_str);
 	}
 #endif
+#endif
 
 	ret << "lsb_release" << Glue::colon() << LSBreleaseJSON();
+
+	ret << "environment" << Glue::colon() << envJSON();
 
 	return ret.str();
 }

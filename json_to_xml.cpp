@@ -64,6 +64,7 @@ bool JSONtoXML::arr(pugi::xml_node& node, std::string name) {
 
 bool JSONtoXML::obj(pugi::xml_node& node) {
     if (!expect('{')) return false;
+    if (expect('}')) return true;
     while (now() != '\0') {
         std::string name;
         if (!str(name)) return false;
