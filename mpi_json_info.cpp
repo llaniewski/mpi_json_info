@@ -77,16 +77,13 @@ Glue::alwaysquote pciJSON(pci_id_t pci) {
 cpu_set_t cpuSetFromPCI(pci_id_t pci) {
 	char str[1024];
 	sprintf(str, "/sys/class/pci_bus/%04x:%02x/cpuaffinity", pci.domain, pci.bus);
-	printf("file: %s\n", str);
 	FILE *f = fopen(str,"r");
 	cpu_set_t cpuSet;
 	CPU_ZERO(&cpuSet);
 	if (f == NULL) return cpuSet;
-	printf("opened\n");
 	unsigned int val;
 	int j = 0;
 	while(fscanf(f, "%x", &val)) {
-		printf("%x\n",val);
 		for (int i = 0; i < 32; ++i) {
 			 if (val & (1 << i)) CPU_SET(j, &cpuSet);
 			 j++;
