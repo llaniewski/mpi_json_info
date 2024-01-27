@@ -76,6 +76,9 @@ JSON gpuJSON() {
 				gpu << "multiProcessorCount" << Glue::colon() << prop.multiProcessorCount;
 				// gpu << "ECCEnabled" << Glue::colon() << Glue::neverquote(prop.ECCEnabled ? "true" : "false");
 				gpu << "ECCEnabled" << Glue::colon() << (bool) prop.ECCEnabled;
+				gpu << "PCIbus" << Glue::colon() << prop.pciBusID;
+				gpu << "PCIdevice" << Glue::colon() << prop.pciDeviceID;
+				gpu << "PCIdomain" << Glue::colon() << prop.pciDomainID;
 			}
 			gpus << gpu.str();
 		}

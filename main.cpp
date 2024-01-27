@@ -7,8 +7,8 @@
 #include "mpi_json_info.h"
 #include "pugixml.hpp"
 #include "json_to_xml.hpp"
-#include "curlCall.h"
-#include "faunadb.h"
+//#include "curlCall.h"
+//#include "faunadb.h"
 
 
 
@@ -26,8 +26,8 @@ int main (int argc, char *argv[]) {
             infoglue << "MPI"  << Glue::colon() << nodesJSON(comm, true);
             JSON localinfo = localJSON();
             infoglue << "user"  << Glue::colon() << localinfo;
-            JSON geoinfo = curlAPICall("https://ipapi.co/json/");
-            infoglue << "IP"  << Glue::colon() << geoinfo;
+//            JSON geoinfo = curlAPICall("https://ipapi.co/json/");
+//            infoglue << "IP"  << Glue::colon() << geoinfo;
             infoglue << "compile"  << Glue::colon() << compilationJSON();
             infoglue << "runtime"  << Glue::colon() << runtimeJSON();
 

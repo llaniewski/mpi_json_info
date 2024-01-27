@@ -1,6 +1,6 @@
 CXX=CC
 
-CXXFLAGS  = -O3 -Wno-write-strings -std=c++11 -fopenmp --rocm-path=${ROCM_PATH} -x hip
+CXXFLAGS  = -O3  -std=c++11 -fopenmp
 #CXXFLAGS += -I/usr/lib/x86_64-linux-gnu/openmpi/include -I/usr/lib/x86_64-linux-gnu/openmpi/include/openmpi -L/usr/lib/x86_64-linux-gnu/openmpi/lib
 #CXXFLAGS += -I/usr/local/cuda-11.8/include
 #LDFLAGS   = -L/usr/lib/openmpi/lib -lmpi -lmpi_cxx
@@ -8,7 +8,7 @@ LDFLAGS  += -lm -lpthread
 #LDFLAGS  += -L/usr/local/cuda-11.8/lib64
 #LDFLAGS  += -lcudart -lnvidia-ml
 #CXXFLAGS += -DCROSS_GPU
-CXXFLAGS += -DCROSS_HIP #--offload-arch=gfx90a
+CXXFLAGS += -DCROSS_GPU #--offload-arch=gfx90a
 LDFLAGS  += -lcurl
 
 all : main
