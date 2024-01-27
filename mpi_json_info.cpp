@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <vector>
+#include <map>
 #include <fstream>
 #include <cerrno>
 #include <pwd.h>
@@ -189,8 +190,8 @@ JSON gpuJSON() {
 
 JSON cpuJSON() {
 	JSONobject ret;
-	compress_rep physicalid;
-	compress_rep coreid;
+	std::vector<int> physicalid;
+	std::vector<int> coreid;
 	JSONarray cpus;
 	int ncores=0;
 	int ncpu=0;
@@ -207,9 +208,10 @@ JSON cpuJSON() {
 		while (std::getline(f, line)) {
 			if (line == "") {
 				ncores++;
-				physicalid << atoi(cpuname.c_str());
-				coreid << atoi(corename.c_str());
 				int k = atoi(cpuname.c_str());
+				physicalid.push_back(k);
+				int k2 = atoi(corename.c_str());
+				coreid.push_back(k2);
 				if (k > cpunumber) {
 					ncpu++;
 					cpus << cpu.str();
@@ -243,10 +245,25 @@ JSON cpuJSON() {
 		}
 		f.close();
 	}
+	std::map< int, std::map< int, int > > core_map;
+	for (size_t i=0; i<physicalid.size(); i++) core_map[physicalid[i]][coreid[i]]=0;
+	for (auto& [pid, pmap] : core_map) {
+		int i=0;
+		for (auto& [cid, val] : pmap) val = i++;
+	}		
 	ret << "vcores" << Glue::colon() << ncores;
 	ret << "cpus" << Glue::colon() << ncpu;
-	ret << "vcore_to_cpu" << Glue::colon() << physicalid.str();
-	ret << "vcore_to_core" << Glue::colon() << coreid.str();
+	compress_rep physicalid_rep;
+	compress_rep coreid_rep;
+	for (size_t i=0; i<physicalid.size(); i++) {
+		int pid = physicalid[i];
+		int cid = coreid[i];
+		physicalid_rep << pid;
+		int mapped = core_map[pid][cid];
+		coreid_rep << mapped;
+	}
+	ret << "vcore_to_cpu" << Glue::colon() << physicalid_rep.str();
+	ret << "vcore_to_core" << Glue::colon() << coreid_rep.str();
 	ret << "cpu" << Glue::colon() << cpus.str();
 	return ret.str();
 }
