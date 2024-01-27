@@ -25,6 +25,12 @@
 
 extern char **environ;
 
+struct pci_id_t {
+	int domain;
+	int bus;
+	int device;
+};
+
 JSON envJSON() {
   JSONobject ret;
   char **s = environ;
@@ -45,6 +51,49 @@ std::string nodeName(MPI_Comm comm) {
 	char cpname[MPI_MAX_PROCESSOR_NAME];
 	MPI_Get_processor_name(cpname, &cpname_len);
 	return std::string(cpname, cpname_len);
+}
+
+cpu_set_t cpuSetFromSched() {
+	cpu_set_t mask;
+	sched_getaffinity(0, sizeof(cpu_set_t), &mask);
+	return mask;
+}
+	
+JSON cpuSetJSON(cpu_set_t mask) {
+	compress_rep ret;
+	for (int i=0; i<CPU_SETSIZE; i++) {
+		if (CPU_ISSET(i, &mask)) ret << i;
+	}
+	return ret.str();
+}
+
+Glue::alwaysquote pciJSON(pci_id_t pci) {
+	char str[1024];
+	sprintf(str, "%04x:%02x:%02x", pci.domain, pci.bus, pci.device);
+	return std::string(str);
+}
+
+cpu_set_t cpuSetFromPCI(pci_id_t pci) {
+	char str[1024];
+	sprintf(str, "/sys/class/pci_bus/%04x:%02x/cpuaffinity", pci.domain, pci.bus);
+	printf("file: %s\n", str);
+	FILE *f = fopen(str,"r");
+	cpu_set_t cpuSet;
+	CPU_ZERO(&cpuSet);
+	if (f == NULL) return cpuSet;
+	printf("opened\n");
+	unsigned int val;
+	int j = 0;
+	while(fscanf(f, "%x", &val)) {
+		printf("%x\n",val);
+		for (int i = 0; i < 32; ++i) {
+			 if (val & (1 << i)) CPU_SET(j, &cpuSet);
+			 j++;
+		}
+		if (getc(f) != ',') break;
+	}
+	fclose(f);
+	return cpuSet;
 }
 
 JSON gpuJSON() {
@@ -76,9 +125,12 @@ JSON gpuJSON() {
 				gpu << "multiProcessorCount" << Glue::colon() << prop.multiProcessorCount;
 				// gpu << "ECCEnabled" << Glue::colon() << Glue::neverquote(prop.ECCEnabled ? "true" : "false");
 				gpu << "ECCEnabled" << Glue::colon() << (bool) prop.ECCEnabled;
-				gpu << "PCIbus" << Glue::colon() << prop.pciBusID;
-				gpu << "PCIdevice" << Glue::colon() << prop.pciDeviceID;
-				gpu << "PCIdomain" << Glue::colon() << prop.pciDomainID;
+				pci_id_t pci;
+				pci.domain = prop.pciDomainID;
+				pci.bus = prop.pciBusID;
+				pci.device = prop.pciDeviceID;
+				gpu << "PCI" << Glue::colon() << pciJSON(pci);
+				gpu << "cpuaffinity" << Glue::colon() << cpuSetJSON(cpuSetFromPCI(pci));
 			}
 			gpus << gpu.str();
 		}
@@ -228,15 +280,8 @@ void MPI_Bcast(std::vector<T>& vec, MPI_Datatype typ, int root, MPI_Comm comm) {
 
 
 JSON getCoreBind() {
-	cpu_set_t mask;
-	sched_getaffinity(0, sizeof(cpu_set_t), &mask);
-	compress_rep ret;
-    for (int i=0; i<CPU_SETSIZE; i++) {
-		if (CPU_ISSET(i, &mask)) ret << i;
-	}
-	return ret.str();
+	return cpuSetJSON(cpuSetFromSched());
 }
-
 
 std::pair< JSON, int > procJSON(int node) {
 	int core = sched_getcpu();
